@@ -21,7 +21,11 @@ Upload any tabular file and instantly get a full quality report: column statisti
 
 `CSV` · `XLSX` · `XLS` · `Parquet` · `JSON`
 
-## Getting started
+## Live demo
+
+🔗 **[rsl-data-monitoring.streamlit.app](https://rsl-data-monitoring.streamlit.app/)**
+
+## Getting started (local)
 
 ```bash
 # 1. Install dependencies
@@ -32,13 +36,6 @@ streamlit run app/app.py
 ```
 
 The app opens in your browser at `http://localhost:8501`.
-
-## Deploy to Streamlit Community Cloud
-
-1. Push this folder to a public GitHub repository
-2. Go to [share.streamlit.io](https://share.streamlit.io) → **New app**
-3. Set **Main file path** to `app/app.py`
-4. Click **Deploy**
 
 ## Project structure
 
