@@ -454,12 +454,34 @@ if "rules" not in st.session_state:
 RULE_TYPES = [
     "No missing values",
     "Missing % ≤",
+    "No duplicates",
+    "Unique count ==",
+    "Unique count ≥",
+    "Unique count ≤",
+    "Values in",
+    "All values ≥",
+    "All values ≤",
+    "Between",
+    "Min ≥",
+    "Max ≤",
+    "Mean ≥",
+    "Mean ≤",
+    "Std ≤",
+    "No outliers (IQR)",
+]
+NUMERIC_RULES = {
     "All values ≥",
     "All values ≤",
     "Min ≥",
     "Max ≤",
-]
-NUMERIC_RULES = {"All values ≥", "All values ≤", "Min ≥", "Max ≤"}
+    "Mean ≥",
+    "Mean ≤",
+    "Std ≤",
+    "No outliers (IQR)",
+    "Between",
+}
+NO_THRESHOLD_RULES = {"No missing values", "No outliers (IQR)", "No duplicates"}
+STRING_THRESHOLD_RULES = {"Values in", "Between"}
 
 with st.form("add_rule_form"):
     rc1, rc2, rc3 = st.columns([3, 3, 2])
@@ -477,18 +499,31 @@ with st.form("add_rule_form"):
         )
         rule_type = st.selectbox("Rule", available_rules, key="rule_type")
     with rc3:
-        needs_threshold = rule_type != "No missing values"
+        needs_threshold = rule_type not in NO_THRESHOLD_RULES
+        hint = {
+            "Between": "min,max e.g. 0,100 or 0.1,0.3",
+            "Values in": "val1,val2,... e.g. A,B,C",
+        }.get(rule_type, "")
         threshold = st.text_input(
-            "Threshold", disabled=not needs_threshold, key="rule_threshold"
+            "Threshold",
+            disabled=not needs_threshold,
+            key="rule_threshold",
         )
+        if hint:
+            st.caption(hint)
     add_rule = st.form_submit_button("Add rule")
 
 if add_rule:
-    if rule_type != "No missing values" and threshold == "":
+    if rule_type not in NO_THRESHOLD_RULES and threshold == "":
         st.warning("Please enter a threshold value.")
     else:
         try:
-            thr = float(threshold) if needs_threshold else None
+            if rule_type in NO_THRESHOLD_RULES:
+                thr = None
+            elif rule_type in STRING_THRESHOLD_RULES:
+                thr = threshold.strip()
+            else:
+                thr = float(threshold)
             st.session_state["rules"].append(
                 {"col": rule_col, "type": rule_type, "threshold": thr}
             )
@@ -523,6 +558,29 @@ if rules:
             actual = series.isna().mean() * 100
             passed = actual <= thr
             detail = f"{actual:.2f}% missing (limit {thr}%)"
+        elif rtype == "No duplicates":
+            actual = series.duplicated().sum()
+            passed = actual == 0
+            detail = f"{actual} duplicate(s)"
+        elif rtype == "Unique count ==":
+            actual = series.nunique()
+            passed = actual == int(thr)
+            detail = f"{actual} unique (expected {int(thr)})"
+        elif rtype == "Unique count ≥":
+            actual = series.nunique()
+            passed = actual >= int(thr)
+            detail = f"{actual} unique (expected ≥ {int(thr)})"
+        elif rtype == "Unique count ≤":
+            actual = series.nunique()
+            passed = actual <= int(thr)
+            detail = f"{actual} unique (expected ≤ {int(thr)})"
+        elif rtype == "Values in":
+            allowed = {v.strip() for v in thr.split(",")}
+            invalid = set(series.dropna().astype(str).unique()) - allowed
+            passed = len(invalid) == 0
+            detail = (
+                f"{len(invalid)} unexpected value(s): {', '.join(list(invalid)[:5])}"
+            )
         elif rtype == "All values ≥":
             violations = (series.dropna() < thr).sum()
             passed = violations == 0
@@ -531,6 +589,12 @@ if rules:
             violations = (series.dropna() > thr).sum()
             passed = violations == 0
             detail = f"{violations} value(s) above {thr}"
+        elif rtype == "Between":
+            lo, hi = (float(v.strip()) for v in thr.split(","))
+            below = (series.dropna() < lo).sum()
+            above = (series.dropna() > hi).sum()
+            passed = below == 0 and above == 0
+            detail = f"{below} below {lo}, {above} above {hi}"
         elif rtype == "Min ≥":
             actual = series.min()
             passed = actual >= thr
@@ -539,6 +603,24 @@ if rules:
             actual = series.max()
             passed = actual <= thr
             detail = f"max = {actual} (expected ≤ {thr})"
+        elif rtype == "Mean ≥":
+            actual = round(series.mean(), 2)
+            passed = actual >= thr
+            detail = f"mean = {actual} (expected ≥ {thr})"
+        elif rtype == "Mean ≤":
+            actual = round(series.mean(), 2)
+            passed = actual <= thr
+            detail = f"mean = {actual} (expected ≤ {thr})"
+        elif rtype == "Std ≤":
+            actual = round(series.std(), 2)
+            passed = actual <= thr
+            detail = f"std = {actual} (expected ≤ {thr})"
+        elif rtype == "No outliers (IQR)":
+            q1, q3 = series.quantile(0.25), series.quantile(0.75)
+            iqr = q3 - q1
+            actual = int(((series < q1 - 1.5 * iqr) | (series > q3 + 1.5 * iqr)).sum())
+            passed = actual == 0
+            detail = f"{actual} outlier(s) detected"
         results.append(
             {
                 "Column": col,
