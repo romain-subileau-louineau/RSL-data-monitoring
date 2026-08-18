@@ -66,12 +66,14 @@ with st.form("analysis_form"):
     uploaded_file = st.file_uploader(
         "Upload a dataset", type=["csv", "xlsx", "xls", "parquet", "json"]
     )
+    has_header = st.toggle("File has a header row", value=True)
     submitted = st.form_submit_button("Analyse")
 
 if submitted:
     df = None
     if uploaded_file is not None:
         ext = uploaded_file.name.rsplit(".", 1)[-1].lower()
+        header_arg = 0 if has_header else None
         if ext == "csv":
             df = pd.read_csv(
                 uploaded_file,
@@ -81,15 +83,20 @@ if submitted:
                 engine="python",
                 on_bad_lines="skip",
                 quoting=3,  # csv.QUOTE_NONE — ignore unescaped quotes in values
+                header=header_arg,
             )
         elif ext in ("xlsx", "xls"):
-            df = pd.read_excel(uploaded_file)
+            df = pd.read_excel(uploaded_file, header=header_arg)
         elif ext == "parquet":
             df = pd.read_parquet(uploaded_file)
         elif ext == "json":
             df = pd.read_json(uploaded_file)
         else:
             st.error(f"Unsupported format: {ext}")
+
+        # Rename numeric column indices to "Column 1, 2, ..." when no header
+        if df is not None and not has_header:
+            df.columns = [f"Column {i + 1}" for i in range(len(df.columns))]
 
     if df is not None:
         st.session_state["df"] = df
